@@ -1,0 +1,7 @@
+# Removing some files not necessary inside the container during the build
+
+.github
+
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+README.md
