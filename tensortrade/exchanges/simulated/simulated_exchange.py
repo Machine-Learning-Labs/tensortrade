@@ -19,6 +19,7 @@ import tensortrade.slippage as slippage
 
 from typing import List
 
+from tensortrade.base.exceptions import InsufficientFundsForAllocation
 from tensortrade.trades import Trade, TradeType, TradeSide
 from tensortrade.instruments import TradingPair, Quantity
 from tensortrade.exchanges import Exchange
@@ -125,13 +126,24 @@ class SimulatedExchange(Exchange):
             return None
 
         commission = Quantity(order.pair.base, order.size * self._commission, order.path_id)
-        base_size = self._contain_size(order.size - commission.size)
+        size = self._contain_size(order.size - commission.size)
 
         if order.type == TradeType.MARKET:
             scale = order.price / price
-            base_size = self._contain_size(scale * order.size - commission.size)
+            size = self._contain_size(scale * order.size - commission.size)
 
-        quantity = Quantity(order.pair.base, base_size, order.path_id)
+        base_wallet -= commission
+
+        try:
+            quantity = Quantity(order.pair.base, size, order.path_id)
+            base_wallet -= quantity
+        except InsufficientFundsForAllocation:
+            balance = base_wallet.locked[order.path_id]
+            quantity = Quantity(order.pair.base, balance.size, order.path_id)
+            base_wallet -= quantity
+
+        quote_size = (order.price / price) * (size / price)
+        quote_wallet += Quantity(order.pair.quote, quote_size, order.path_id)
 
         trade = Trade(order_id=order.id,
                       exchange_id=self.id,
@@ -144,11 +156,6 @@ class SimulatedExchange(Exchange):
                       commission=commission)
 
         # self._slippage_model.adjust_trade(trade)
-        quote_size = (order.price / trade.price) * (trade.size / trade.price)
-
-        base_wallet -= quantity
-        base_wallet -= commission
-        quote_wallet += Quantity(order.pair.quote, quote_size, order.path_id)
 
         return trade
 
@@ -160,7 +167,20 @@ class SimulatedExchange(Exchange):
 
         commission = Quantity(order.pair.base, order.size * self._commission, order.path_id)
         size = self._contain_size(order.size - commission.size)
-        quantity = Quantity(order.pair.base, size, order.path_id)
+
+        try:
+            quote_size = size / price * (price / order.price)
+            quote_wallet -= Quantity(order.pair.quote, quote_size, order.path_id)
+        except InsufficientFundsForAllocation:
+            balance = quote_wallet.locked[order.path_id]
+            quote_size = balance.size
+            quote_wallet -= Quantity(order.pair.quote, quote_size, order.path_id)
+
+        base_size = quote_size * price / (price / order.price)
+        quantity = Quantity(order.pair.base, base_size, order.path_id)
+
+        base_wallet += quantity
+        base_wallet -= commission
 
         trade = Trade(order_id=order.id,
                       exchange_id=self.id,
@@ -173,12 +193,6 @@ class SimulatedExchange(Exchange):
                       commission=commission)
 
         # self._slippage_model.adjust_trade(trade)
-
-        quote_size = trade.size / trade.price * (trade.price / order.price)
-
-        quote_wallet -= Quantity(order.pair.quote, quote_size, order.path_id)
-        base_wallet += quantity
-        base_wallet -= commission
 
         return trade
 
