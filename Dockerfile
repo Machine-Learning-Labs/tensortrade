@@ -3,7 +3,7 @@ FROM python:3.6
 
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update -y --no-install-recommends && \
+RUN apt-get update -y && \
   apt-get install -y \
   build-essential \
   pandoc \
