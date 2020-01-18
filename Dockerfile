@@ -1,17 +1,23 @@
 # Optimized with fromlatest.io
 FROM python:3.6
+MAINTAINER adamjking3@gmail.com
 
+# To ease the python outputs
 ENV PYTHONUNBUFFERED=1
 
+# Before copy anything, install dependencies and remove cache
 RUN RUN apt-get update -y && \
     apt-get install pandoc -y && \
     apt-get install python-mpi4py -y &&\
     rm -rf /var/lib/apt/lists/*
 
+# Tensortrade setup
+
 WORKDIR /
 
 COPY . ./
 
+# Just one line to stay in same layer
 RUN pip install --upgrade pip &&\
     pip install -e .[tf,baselines,tensorforce,ta,ccxt,fbm,docs,tests] &&\
     pip install -r ./requirements.txt &&\
