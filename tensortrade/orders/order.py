@@ -17,8 +17,8 @@ from enum import Enum
 from typing import Callable
 
 from tensortrade.base import TimedIdentifiable
-from tensortrade.base.exceptions import InvalidOrderQuantity, InsufficientFundsForAllocation
-from tensortrade.instruments import Quantity
+from tensortrade.base.exceptions import InvalidOrderQuantity, InsufficientFunds
+from tensortrade.instruments import Quantity, Price
 from tensortrade.trades import Trade, TradeSide, TradeType
 
 
@@ -51,7 +51,7 @@ class Order(TimedIdentifiable):
                  pair: 'TradingPair',
                  quantity: 'Quantity',
                  portfolio: 'Portfolio',
-                 price: float,
+                 price: 'Price',
                  criteria: Callable[['Order', 'Exchange'], bool] = None,
                  path_id: str = None,
                  ttl_in_seconds: int = None,
@@ -86,16 +86,15 @@ class Order(TimedIdentifiable):
     @property
     def size(self) -> float:
         if self.pair.base is self.quantity.instrument:
-            return round(self.quantity.size, self.pair.base.precision)
-
-        return round(self.quantity.size * self.price, self.pair.base.precision)
+            return self.quantity.size
+        return self.quantity.size * self.price.rate
 
     @property
-    def price(self) -> float:
+    def price(self) -> 'Price':
         return self._price
 
     @price.setter
-    def price(self, price: float):
+    def price(self, price: 'Price'):
         self._price = price
 
     @property
@@ -127,6 +126,8 @@ class Order(TimedIdentifiable):
         return self.type == TradeType.MARKET
 
     def is_executable_on(self, exchange: 'Exchange'):
+        if not exchange.is_pair_tradable(self.pair):
+            return False
         return self.criteria is None or self.criteria(self, exchange)
 
     def is_complete(self):
@@ -151,7 +152,7 @@ class Order(TimedIdentifiable):
         if self.path_id not in wallet.locked.keys():
             try:
                 wallet -= self.size * instrument
-            except InsufficientFundsForAllocation:
+            except InsufficientFunds:
                 size = wallet.balance.size
                 wallet -= size * instrument
                 self.quantity = Quantity(instrument, size, path_id=self.path_id)
@@ -226,16 +227,16 @@ class Order(TimedIdentifiable):
     def to_json(self):
         return {
             "id": str(self.id),
-            "step": self.step,
+            "step": int(self.step),
             "status": str(self.status),
             "type": str(self.type),
             "side": str(self.side),
             "base_symbol": str(self.pair.base.symbol),
             "quote_symbol": str(self.pair.quote.symbol),
             "quantity": str(self.quantity),
-            "size": str(self.size),
-            "filled_size": str(self.filled_size),
-            "price": str(self.price),
+            "size": float(self.size),
+            "filled_size": self.filled_size,
+            "price": float(self.price),
             "criteria": str(self.criteria),
             "path_id": str(self.path_id),
             "created_at": str(self.created_at)
