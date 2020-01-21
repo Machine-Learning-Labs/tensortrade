@@ -19,6 +19,7 @@ COPY . ./
 
 # Just one line to stay in same layer
 RUN pip install --upgrade pip &&\
+    pip install ipyparallel &&\
     pip install -e .[tf,baselines,tensorforce,ta,ccxt,fbm,docs,tests] &&\
     pip install -r ./requirements.txt &&\
     pip install -r ./examples/requirements.txt
